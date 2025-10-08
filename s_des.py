@@ -273,7 +273,7 @@ class SDESGUI(QMainWindow):
         self.initUI()
 
     def initUI(self):
-        self.setWindowTitle('S-DES加解密工具 - 扩展版')
+        self.setWindowTitle('S-DES加解密工具')
         self.setGeometry(100, 100, 700, 600)
 
         # 中央窗口部件
