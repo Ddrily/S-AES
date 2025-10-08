@@ -3,532 +3,404 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>S-DES加密工具用户指南与开发手册</title>
+    <title>S-DES加解密工具</title>
     <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             line-height: 1.6;
             color: #333;
+            background-color: #f5f8fa;
+            padding: 20px;
             max-width: 1200px;
             margin: 0 auto;
-            padding: 20px;
-            background-color: #f8f9fa;
         }
-        h1, h2, h3 {
-            color: #2c3e50;
-            border-bottom: 2px solid #3498db;
-            padding-bottom: 10px;
-        }
-        .section {
-            background-color: white;
-            border-radius: 8px;
-            padding: 25px;
-            margin-bottom: 30px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-        .section-title {
+        
+        header {
             text-align: center;
-            color: #2980b9;
-            margin-top: 0;
+            margin-bottom: 40px;
+            padding: 30px;
+            background: linear-gradient(135deg, #6e8efb 0%, #a777e3 100%);
+            color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
-        .sub-section {
+        
+        h1 {
+            font-size: 2.8rem;
+            margin-bottom: 15px;
+        }
+        
+        .subtitle {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .badges {
             margin: 20px 0;
         }
-        .code-block {
-            background-color: #2c3e50;
-            color: #ecf0f1;
-            padding: 15px;
-            border-radius: 5px;
-            overflow-x: auto;
-            font-family: 'Courier New', Courier, monospace;
-            margin: 15px 0;
+        
+        .badge {
+            display: inline-block;
+            background-color: #5c6bc0;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            margin: 0 5px 5px 0;
         }
-        .note {
-            background-color: #e3f2fd;
-            border-left: 4px solid #2196f3;
-            padding: 10px 15px;
-            margin: 15px 0;
+        
+        section {
+            background-color: white;
+            border-radius: 10px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
         }
-        .example {
-            background-color: #e8f5e9;
-            border-left: 4px solid #4caf50;
-            padding: 10px 15px;
-            margin: 15px 0;
+        
+        h2 {
+            color: #5c6bc0;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e8eaf6;
         }
-        .warning {
-            background-color: #ffebee;
-            border-left: 4px solid #f44336;
-            padding: 10px 15px;
-            margin: 15px 0;
+        
+        h3 {
+            color: #3f51b5;
+            margin: 20px 0 10px;
         }
-        .structure {
+        
+        p {
+            margin-bottom: 15px;
+        }
+        
+        code {
+            background-color: #f5f5f5;
+            padding: 2px 5px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        pre {
             background-color: #f5f5f5;
             padding: 15px;
             border-radius: 5px;
-            margin: 15px 0;
+            overflow-x: auto;
+            margin: 20px 0;
+            border-left: 4px solid #5c6bc0;
         }
-        .flex-container {
-            display: flex;
-            gap: 20px;
-            flex-wrap: wrap;
-        }
-        .flex-item {
-            flex: 1;
-            min-width: 300px;
-        }
-        .btn {
-            display: inline-block;
-            background-color: #3498db;
-            color: white;
-            padding: 10px 20px;
-            text-decoration: none;
-            border-radius: 5px;
-            margin: 10px 5px;
-            transition: background-color 0.3s;
-        }
-        .btn:hover {
-            background-color: #2980b9;
-        }
-        .gui-preview {
-            background-color: #f0f0f0;
-            border: 1px solid #ddd;
-            border-radius: 5px;
+        
+        .algorithm-steps {
+            background-color: #e8eaf6;
             padding: 20px;
+            border-radius: 5px;
             margin: 20px 0;
         }
-        .gui-box {
-            background-color: white;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            padding: 15px;
-            margin-bottom: 15px;
+        
+        .algorithm-steps ol {
+            padding-left: 25px;
         }
-        .gui-label {
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-        .gui-input {
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
+        
+        .algorithm-steps li {
             margin-bottom: 10px;
         }
-        .gui-btn {
-            background-color: #3498db;
-            color: white;
-            border: none;
-            padding: 8px 15px;
-            border-radius: 4px;
-            cursor: pointer;
+        
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
         }
-        .tabs {
-            display: flex;
-            margin-bottom: 20px;
+        
+        .feature {
+            background-color: #e8eaf6;
+            padding: 20px;
+            border-radius: 8px;
+            transition: transform 0.3s ease;
         }
-        .tab {
-            padding: 10px 20px;
-            background-color: #e0e0e0;
-            cursor: pointer;
-            border-radius: 5px 5px 0 0;
-            margin-right: 5px;
+        
+        .feature:hover {
+            transform: translateY(-5px);
         }
-        .tab.active {
-            background-color: #3498db;
-            color: white;
+        
+        .feature h3 {
+            color: #3f51b5;
+            margin-top: 0;
         }
-        .tab-content {
-            display: none;
+        
+        .screenshot {
+            text-align: center;
+            margin: 30px 0;
         }
-        .tab-content.active {
-            display: block;
+        
+        .screenshot img {
+            max-width: 100%;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
         }
+        
+        .caption {
+            font-style: italic;
+            margin-top: 10px;
+            color: #666;
+        }
+        
+        .installation-steps {
+            background-color: #e8eaf6;
+            padding: 20px;
+            border-radius: 5px;
+        }
+        
+        .installation-steps ol {
+            padding-left: 25px;
+        }
+        
+        .installation-steps li {
+            margin-bottom: 15px;
+        }
+        
         table {
             width: 100%;
             border-collapse: collapse;
             margin: 20px 0;
         }
+        
         th, td {
-            border: 1px solid #ddd;
-            padding: 10px;
+            padding: 12px 15px;
             text-align: left;
+            border-bottom: 1px solid #ddd;
         }
+        
         th {
-            background-color: #f2f2f2;
+            background-color: #e8eaf6;
+            color: #3f51b5;
+        }
+        
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        
+        footer {
+            text-align: center;
+            margin-top: 50px;
+            padding: 20px;
+            color: #666;
+            border-top: 1px solid #ddd;
+        }
+        
+        @media (max-width: 768px) {
+            .features {
+                grid-template-columns: 1fr;
+            }
+            
+            h1 {
+                font-size: 2.2rem;
+            }
         }
     </style>
 </head>
 <body>
-    <h1 class="section-title">S-DES加密工具用户指南与开发手册</h1>
+    <header>
+        <h1>S-DES加解密工具</h1>
+        <p class="subtitle">一个基于Python和PyQt5实现的简化版DES加密算法图形界面工具</p>
+        <div class="badges">
+            <span class="badge">Python</span>
+            <span class="badge">PyQt5</span>
+            <span class="badge">密码学</span>
+            <span class="badge">S-DES</span>
+            <span class="badge">GUI应用</span>
+        </div>
+    </header>
     
-    <div class="tabs">
-        <div class="tab active" onclick="switchTab('user-guide')">用户指南</div>
-        <div class="tab" onclick="switchTab('dev-guide')">开发手册</div>
-    </div>
+    <section id="overview">
+        <h2>项目概述</h2>
+        <p>S-DES（Simplified Data Encryption Standard）是DES加密算法的简化版本，主要用于教学目的，帮助理解DES加密的基本原理。本项目实现了一个完整的S-DES加解密工具，提供直观的图形用户界面，使用户能够轻松地进行加密和解密操作。</p>
+        
+        <div class="algorithm-steps">
+            <h3>S-DES算法步骤</h3>
+            <ol>
+                <li>任意长度明文按64bit分块，不足则填充</li>
+                <li>分块明文进行初始置换，输出新的64位数据块</li>
+                <li>加密轮次（共16次），每个轮次包含四个步骤</li>
+                <li>在最后一个轮次完成后，将经过加密的数据块进行末置换，得到64位密文</li>
+            </ol>
+        </div>
+    </section>
     
-    <div id="user-guide" class="tab-content active">
-        <div class="section">
-            <h2>用户指南</h2>
-            
-            <div class="sub-section">
-                <h3>1. 软件概述</h3>
-                <p>本工具是一个基于S-DES（简化版DES）加密算法的图形界面应用程序，用于对8位二进制数据进行加密和解密操作。</p>
+    <section id="features">
+        <h2>功能特点</h2>
+        <div class="features">
+            <div class="feature">
+                <h3>🔒 加密功能</h3>
+                <p>支持8位二进制明文的加密操作，使用10位二进制密钥生成加密后的密文。</p>
             </div>
-            
-            <div class="sub-section">
-                <h3>2. 安装要求</h3>
-                <ul>
-                    <li>操作系统：Windows、macOS或Linux</li>
-                    <li>Python环境：Python 3.6或更高版本</li>
-                    <li>依赖库：PyQt5（安装命令：<code>pip install PyQt5</code>）</li>
-                </ul>
+            <div class="feature">
+                <h3>🔓 解密功能</h3>
+                <p>支持8位二进制密文的解密操作，使用加密时相同的密钥恢复原始明文。</p>
             </div>
-            
-            <div class="sub-section">
-                <h3>3. 使用说明</h3>
-                
-                <div class="gui-preview">
-                    <h4>界面预览</h4>
-                    <div class="gui-box">
-                        <div class="gui-label">选择模式</div>
-                        <div>
-                            <input type="radio" id="encrypt" name="mode" checked>
-                            <label for="encrypt">加密</label>
-                            <input type="radio" id="decrypt" name="mode">
-                            <label for="decrypt">解密</label>
-                        </div>
-                    </div>
-                    
-                    <div class="gui-box">
-                        <div class="gui-label">输入文本 (8位二进制)</div>
-                        <input type="text" class="gui-input" placeholder="例如: 10101010">
-                    </div>
-                    
-                    <div class="gui-box">
-                        <div class="gui-label">密钥 (10位二进制)</div>
-                        <input type="text" class="gui-input" placeholder="例如: 1010101010">
-                    </div>
-                    
-                    <div>
-                        <button class="gui-btn">执行</button>
-                        <button class="gui-btn">清空</button>
-                    </div>
-                    
-                    <div class="gui-box">
-                        <div class="gui-label">输出</div>
-                        <textarea rows="5" style="width:100%; padding:8px;"></textarea>
-                    </div>
-                </div>
-                
-                <h4>3.1 界面布局</h4>
-                <ul>
-                    <li><strong>模式选择</strong>：选择"加密"或"解密"模式</li>
-                    <li><strong>输入区域</strong>：
-                        <ul>
-                            <li>文本输入框：输入8位二进制数据</li>
-                            <li>密钥输入框：输入10位二进制密钥</li>
-                        </ul>
-                    </li>
-                    <li><strong>操作按钮</strong>：
-                        <ul>
-                            <li>"执行"：执行加密/解密操作</li>
-                            <li>"清空"：清空所有输入和输出</li>
-                        </ul>
-                    </li>
-                    <li><strong>输出区域</strong>：显示加密/解密结果</li>
-                </ul>
-                
-                <h4>3.2 加密操作步骤</h4>
-                <ol>
-                    <li>选择"加密"模式</li>
-                    <li>在"输入文本"框中输入8位二进制明文（如"10101010"）</li>
-                    <li>在"密钥"框中输入10位二进制密钥（如"1010101010"）</li>
-                    <li>点击"执行"按钮</li>
-                    <li>在输出区域查看加密结果</li>
-                </ol>
-                
-                <h4>3.3 解密操作步骤</h4>
-                <ol>
-                    <li>选择"解密"模式</li>
-                    <li>在"输入文本"框中输入8位二进制密文</li>
-                    <li>在"密钥"框中输入10位二进制密钥</li>
-                    <li>点击"执行"按钮</li>
-                    <li>在输出区域查看解密结果</li>
-                </ol>
-                
-                <div class="note">
-                    <h4>3.4 注意事项</h4>
-                    <ul>
-                        <li>所有输入必须是二进制格式（只包含0和1）</li>
-                        <li>明文/密文必须严格为8位</li>
-                        <li>密钥必须严格为10位</li>
-                        <li>解密时使用的密钥必须与加密时相同</li>
-                    </ul>
-                </div>
+            <div class="feature">
+                <h3>🎨 直观界面</h3>
+                <p>基于PyQt5开发的图形界面，操作简单直观，无需命令行操作。</p>
             </div>
-            
-            <div class="sub-section">
-                <h3>4. 示例操作</h3>
-                
-                <div class="example">
-                    <h4>加密示例：</h4>
-                    <ol>
-                        <li>选择"加密"模式</li>
-                        <li>输入文本：<code>10101010</code></li>
-                        <li>输入密钥：<code>1010101010</code></li>
-                        <li>点击"执行" → 输出密文：<code>11000011</code></li>
-                    </ol>
-                </div>
-                
-                <div class="example">
-                    <h4>解密示例：</h4>
-                    <ol>
-                        <li>选择"解密"模式</li>
-                        <li>输入文本：<code>11000011</code></li>
-                        <li>输入密钥：<code>1010101010</code></li>
-                        <li>点击"执行" → 输出明文：<code>10101010</code></li>
-                    </ol>
-                </div>
+            <div class="feature">
+                <h3>🔐 密钥生成</h3>
+                <p>自动从10位主密钥生成8位轮密钥，用于加密和解密过程。</p>
+            </div>
+            <div class="feature">
+                <h3>📋 输入验证</h3>
+                <p>全面的输入验证机制，确保输入的明文、密文和密钥符合格式要求。</p>
+            </div>
+            <div class="feature">
+                <h3>💾 结果展示</h3>
+                <p>清晰的结果输出区域，显示加密或解密的过程和最终结果。</p>
             </div>
         </div>
-    </div>
+    </section>
     
-    <div id="dev-guide" class="tab-content">
-        <div class="section">
-            <h2>开发手册</h2>
+    <section id="screenshots">
+        <h2>界面预览</h2>
+        <div class="screenshot">
             
-            <div class="sub-section">
-                <h3>1. 项目结构</h3>
-                <div class="structure">
-                    <pre>sdes_gui.py
-├── S-DES算法实现
-│   ├── 置换表定义(IP, EP, P10等)
-│   ├── 密钥生成(generate_keys)
-│   ├── 轮函数(f_k)
-│   ├── 加密函数(encrypt)
-│   ├── 解密函数(decrypt)
-│
-├── GUI界面(SDESGUI类)
-│   ├── 界面初始化(initUI)
-│   ├── 执行操作(execute_operation)
-│   ├── 清空操作(clear_all)
-│
-└── 主函数(main)</pre>
-                </div>
-            </div>
-            
-            <div class="sub-section">
-                <h3>2. 核心算法实现</h3>
-                
-                <h4>2.1 置换函数</h4>
-                <div class="code-block">
-def permute(input_bits, table):
-    """通用置换函数"""
-    return ''.join(input_bits[i - 1] for i in table)
-                </div>
-                
-                <h4>2.2 密钥生成</h4>
-                <div class="code-block">
-def generate_keys(key):
-    """生成两个8位子密钥(k1, k2)"""
-    # P10置换
-    # 左右两部分分别循环左移
-    # P8置换生成k1
-    # 再次左移后生成k2
-                </div>
-                
-                <h4>2.3 轮函数</h4>
-                <div class="code-block">
-def f_k(bits, key):
-    """轮函数实现"""
-    # 扩展置换(EP)
-    # 与子密钥异或
-    # S盒替换(S0和S1)
-    # P4置换
-    # 与左半部分异或
-                </div>
-                
-                <h4>2.4 加密流程</h4>
-                <div class="code-block">
-def encrypt(plaintext, key):
-    """加密函数"""
-    # 初始置换(IP)
-    # 第一轮fk(使用k1)
-    # 左右交换
-    # 第二轮fk(使用k2)
-    # 最终置换(IP_INV)
-                </div>
-                
-                <h4>2.5 解密流程</h4>
-                <div class="code-block">
-def decrypt(ciphertext, key):
-    """解密函数"""
-    # 初始置换(IP)
-    # 第一轮fk(使用k2)
-    # 左右交换
-    # 第二轮fk(使用k1)
-    # 最终置换(IP_INV)
-                </div>
-            </div>
-            
-            <div class="sub-section">
-                <h3>3. GUI实现</h3>
-                
-                <h4>3.1 界面初始化</h4>
-                <div class="code-block">
-def initUI(self):
-    """创建GUI界面"""
-    # 创建模式选择组(加密/解密单选按钮)
-    # 创建输入组(文本和密钥输入框)
-    # 创建按钮组(执行和清空按钮)
-    # 创建输出组(只读文本框)
-    # 设置布局和信号连接
-                </div>
-                
-                <h4>3.2 执行操作</h4>
-                <div class="code-block">
-def execute_operation(self):
-    """执行加密/解密操作"""
-    try:
-        # 获取输入文本和密钥
-        # 验证输入格式和长度
-        # 根据选择模式调用encrypt或decrypt
-        # 格式化并显示结果
-    except Exception as e:
-        # 显示错误信息
-                </div>
-                
-                <h4>3.3 清空操作</h4>
-                <div class="code-block">
-def clear_all(self):
-    """清空所有输入和输出"""
-    self.text_input.clear()
-    self.key_input.clear()
-    self.output_text.clear()
-                </div>
-            </div>
-            
-            <div class="sub-section">
-                <h3>4. 扩展与维护</h3>
-                
-                <h4>4.1 添加新功能</h4>
-                <table>
-                    <tr>
-                        <th>功能</th>
-                        <th>实现方式</th>
-                    </tr>
-                    <tr>
-                        <td>文件加密</td>
-                        <td>
-                            <ul>
-                                <li>添加文件选择对话框</li>
-                                <li>按64位分块处理文件</li>
-                                <li>添加填充机制</li>
-                            </ul>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>ASCII支持</td>
-                        <td>
-                            <ul>
-                                <li>添加文本到二进制的转换</li>
-                                <li>支持ASCII字符输入输出</li>
-                            </ul>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>多重加密</td>
-                        <td>
-                            <ul>
-                                <li>实现三重S-DES加密</li>
-                                <li>添加加密模式选择(CBC, ECB等)</li>
-                            </ul>
-                        </td>
-                    </tr>
-                </table>
-                
-                <h4>4.2 优化建议</h4>
-                <table>
-                    <tr>
-                        <th>优化方向</th>
-                        <th>具体建议</th>
-                    </tr>
-                    <tr>
-                        <td>代码重构</td>
-                        <td>
-                            <ul>
-                                <li>将算法实现与GUI分离</li>
-                                <li>创建单独的算法模块</li>
-                            </ul>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>性能优化</td>
-                        <td>
-                            <ul>
-                                <li>添加多线程处理</li>
-                                <li>优化S盒查找实现</li>
-                            </ul>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>界面改进</td>
-                        <td>
-                            <ul>
-                                <li>添加主题切换</li>
-                                <li>添加国际化支持</li>
-                                <li>改进结果展示格式</li>
-                            </ul>
-                        </td>
-                    </tr>
-                </table>
-            </div>
-            
-            <div class="sub-section">
-                <h3>5. 部署说明</h3>
-                <ol>
-                    <li>安装依赖：<code>pip install PyQt5</code></li>
-                    <li>运行程序：<code>python sdes_gui.py</code></li>
-                    <li>打包为可执行文件：
-                        <div class="code-block">
-pip install pyinstaller
-pyinstaller --onefile --windowed sdes_gui.py
-                        </div>
-                    </li>
-                </ol>
-            </div>
-            
-            <div class="warning">
-                <h3>6. 注意事项</h3>
-                <ul>
-                    <li>此实现为教学用途，不适用于实际安全场景</li>
-                    <li>确保所有置换表定义正确无误</li>
-                    <li>输入验证是安全性的重要组成部分</li>
-                </ul>
-            </div>
+            <p class="caption">S-DES加解密工具主界面</p>
         </div>
-    </div>
+    </section>
     
-    <script>
-        function switchTab(tabName) {
-            // 隐藏所有标签内容
-            document.querySelectorAll('.tab-content').forEach(tab => {
-                tab.classList.remove('active');
-            });
-            
-            // 移除所有标签的active类
-            document.querySelectorAll('.tab').forEach(tab => {
-                tab.classList.remove('active');
-            });
-            
-            // 显示选中的标签内容
-            document.getElementById(tabName).classList.add('active');
-            
-            // 为选中的标签添加active类
-            event.currentTarget.classList.add('active');
-        }
-    </script>
+    <section id="installation">
+        <h2>安装与运行</h2>
+        
+        <h3>环境要求</h3>
+        <ul>
+            <li>Python 3.6+</li>
+            <li>PyQt5库</li>
+        </ul>
+        
+        <h3>安装步骤</h3>
+        <div class="installation-steps">
+            <ol>
+                <li>克隆或下载本项目到本地</li>
+                <li>安装所需的依赖库：
+                    <pre><code>pip install PyQt5</code></pre>
+                </li>
+                <li>运行程序：
+                    <pre><code>python s_des_gui.py</code></pre>
+                </li>
+            </ol>
+        </div>
+    </section>
+    
+    <section id="usage">
+        <h2>使用说明</h2>
+        
+        <h3>加密操作</h3>
+        <ol>
+            <li>选择"加密"模式</li>
+            <li>在输入文本框中输入8位二进制明文（如：10101010）</li>
+            <li>在密钥输入框中输入10位二进制密钥（如：1010101010）</li>
+            <li>点击"执行"按钮，加密结果将显示在输出区域</li>
+        </ol>
+        
+        <h3>解密操作</h3>
+        <ol>
+            <li>选择"解密"模式</li>
+            <li>在输入文本框中输入8位二进制密文</li>
+            <li>在密钥输入框中输入加密时使用的10位二进制密钥</li>
+            <li>点击"执行"按钮，解密结果将显示在输出区域</li>
+        </ol>
+        
+        <h3>清空操作</h3>
+        <p>点击"清空"按钮可以清除所有输入和输出内容，以便进行新的加解密操作。</p>
+    </section>
+    
+    <section id="algorithm-details">
+        <h2>算法细节</h2>
+        
+        <h3>置换表</h3>
+        <p>算法使用了多种置换表，包括初始置换(IP)、最终置换(IP_INV)、扩展置换(EP)、密钥置换(P10, P8, P4)等。</p>
+        
+        <h3>S盒</h3>
+        <p>算法使用两个4×4的S盒进行非线性变换，增强加密强度。</p>
+        
+        <h3>密钥生成</h3>
+        <p>从10位主密钥生成两个8位轮密钥(k1, k2)，用于加密和解密的不同轮次。</p>
+        
+        <h3>轮函数</h3>
+        <p>轮函数f_k包含扩展、异或、S盒替换和P4置换等操作，是加密过程的核心。</p>
+    </section>
+    
+    <section id="code-example">
+        <h2>代码示例</h2>
+        
+        <h3>加密函数</h3>
+        <pre><code>def encrypt(plaintext, key):
+    if len(plaintext) != 8:
+        raise ValueError("明文必须是8位二进制字符串")
+
+    # 生成子密钥
+    k1, k2 = generate_keys(key)
+
+    # 初始置换
+    permuted = permute(plaintext, IP)
+
+    # 第一轮
+    round1 = f_k(permuted, k1)
+
+    swapped = round1[4:] + round1[:4]
+
+    # 第二轮
+    round2 = f_k(swapped, k2)
+
+    # 最终置换
+    ciphertext = permute(round2, IP_INV)
+
+    return ciphertext</code></pre>
+        
+        <h3>密钥生成</h3>
+        <pre><code>def generate_keys(key):
+    if len(key) != 10:
+        raise ValueError("密钥必须是10位二进制字符串")
+
+    key_perm = permute(key, P10)
+
+    left = left_shift(key_perm[:5], 1)
+    right = left_shift(key_perm[5:], 1)
+
+    # k1生成
+    k1 = permute(left + right, P8)
+
+    left1 = left_shift(left, 2)
+    right1 = left_shift(right, 2)
+
+    # k2生成
+    k2 = permute(left1 + right1, P8)
+
+    return k1, k2</code></pre>
+    </section>
+    
+    <section id="contributing">
+        <h2>贡献指南</h2>
+        <p>欢迎为本项目贡献代码！如果您有任何改进建议或发现了bug，请提交Issue或Pull Request。</p>
+        
+        <h3>开发方向</h3>
+        <ul>
+            <li>增加更多加密算法支持</li>
+            <li>改进用户界面和用户体验</li>
+            <li>添加文件加密功能</li>
+            <li>增加加密过程可视化</li>
+            <li>支持更多输入格式（如十六进制、ASCII等）</li>
+        </ul>
+    </section>
+    
+    <footer>
+        <p>© 2023 S-DES加解密工具 | 基于MIT开源协议</p>
+        <p>本项目仅用于教育和学习目的，请勿用于生产环境</p>
+    </footer>
 </body>
 </html>
- 
- 
