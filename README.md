@@ -4,7 +4,6 @@
 
 ![Python](https://img.shields.io/badge/Python-3.6%2B-blue)
 ![PyQt5](https://img.shields.io/badge/PyQt5-5.15%2B-green)
-![License](https://img.shields.io/badge/License-MIT-yellow)
 
 ## 项目概述
 
