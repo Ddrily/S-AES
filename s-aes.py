@@ -151,27 +151,62 @@ class S_AES:
         return new_state
 
 
-    #加密单个16位分组
-    def encrypt_block(self, plaintext):
-        if not (0 <= plaintext <= 0xFFFF):
-            raise ValueError("明文必须是16位二进制数")
-        
+    # 加密单个16位分组
+    def encrypt_block(self,plaintext):#明文分组是16位二进制字符串，密钥是16位
+        state= self.int_to_state(plaintext)
+        #轮密钥加
+        state_matrix = self.add_round_key(state,self.round_keys[0])
+        #半字节替换
+        state_matrix = self.sub_nibbles(state_matrix,self.S_BOX)
+        #行移位
+        state_matrix = self.shift_rows(state_matrix)
+        #列混淆
+        state_matrix = self.mix_columns(state_matrix,self.MIX_COLUMNS_MATRIX)
+        #第二次轮密钥加
+        state_matrix = self.add_round_key(state_matrix,self.round_keys[1])
+        #第二轮
+        #半字节替换
+        state_matrix = self.sub_nibbles(state_matrix)
+        #行位移
+        state_matrix = self.shift_rows(state_matrix)
+        #第三次轮密钥加
+        ciphertext = self.add_round_key(state_matrix,self.round_keys[2])
+        return ciphertext
 
-
-
-    #解密单个16位分组
+    # 解密单个16位分组
     def decrypt_block(self, ciphertext):
+        state = self.int_to_state(ciphertext)
+        #轮密钥加
+        state_matrix = self.add_round_key(state,self.round_keys[2])
+        #逆行移位
+        state_matrix = self.shift_rows(state_matrix)
+        #逆半字节代替
+        state_matrix = self.sub_nibbles(state_matrix,self.INV_S_BOX)
+        #轮密钥加
+        state_matrix = self.add_round_key(state_matrix,self.round_keys[1])
+        #逆列混淆
+        state_matrix = self.mix_columns(state_matrix,self.INV_MIX_COLUMNS_MATRIX)
+        #第二轮
+        #逆行移位
+        state_matrix = self.shift_rows(state_matrix)
+        #逆半字节代替
+        state_matrix = self.sub_nibbles(state_matrix,self.INV_S_BOX)
+        plaintext = self.add_round_key(state_matrix,self.round_keys[0])
+        return plaintext
 
-
-    #加密数据
+    # 加密数据
     def encrypt(self, plaintext):
+        #16位二进制字符串
+        if isinstance(plaintext, str):#如果是二进制字符串
+            if len(plaintext) != 16:
+                raise ValueError('明文必须是16位二进制字符串')
+            plaintext = int(plaintext,2)
+        return self.encrypt_block(plaintext)
 
-
-    #解密数据
+    # 解密数据
     def decrypt(self, ciphertext):
-        
-
-
-
-
-    
+        if isinstance(ciphertext, str):
+            if len(ciphertext) != 16:
+                raise ValueError('密文必须是16位二进制字符串')
+            ciphertext = int(ciphertext,2)
+        return self.decrypt_block(ciphertext)
