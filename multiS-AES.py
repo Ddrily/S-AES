@@ -414,7 +414,6 @@ def test_triple_aes():
     
 
 
-
 if __name__ == "__main__":
     # 运行所有测试
     test_double_aes()
