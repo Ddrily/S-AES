@@ -2,9 +2,8 @@ import sys
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QLabel, QLineEdit, QPushButton,
                              QTextEdit, QGroupBox, QTabWidget, QMessageBox,
-                             QFormLayout, QComboBox)
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QFont, QPalette, QColor
+                             QFormLayout)
+from PyQt5.QtGui import QFont
 
 
 class S_AES:
@@ -210,6 +209,63 @@ class S_AES:
             ciphertext = int(ciphertext, 2)
         return self.decrypt_block(ciphertext)
 
+    # CBC模式加密
+    def encrypt_cbc(self, plaintext_blocks, iv):
+        """
+        CBC模式加密
+        plaintext_blocks: 16位二进制字符串列表
+        iv: 16位初始向量（二进制字符串或整数）
+        返回密文块列表
+        """
+        if isinstance(iv, str):
+            iv = int(iv, 2)
+
+        cipher_blocks = []
+        previous = iv
+
+        for block in plaintext_blocks:
+            if isinstance(block, str):
+                block_int = int(block, 2)
+            else:
+                block_int = block
+
+            # 与前一个密文块（或IV）异或
+            xored = block_int ^ previous
+            # 加密
+            encrypted = self.encrypt_block(xored)
+            cipher_blocks.append(encrypted)
+            previous = encrypted
+
+        return cipher_blocks
+
+    # CBC模式解密
+    def decrypt_cbc(self, ciphertext_blocks, iv):
+        """
+        CBC模式解密
+        ciphertext_blocks: 16位二进制字符串列表
+        iv: 16位初始向量（二进制字符串或整数）
+        返回明文块列表
+        """
+        if isinstance(iv, str):
+            iv = int(iv, 2)
+
+        plain_blocks = []
+        previous = iv
+
+        for block in ciphertext_blocks:
+            if isinstance(block, str):
+                block_int = int(block, 2)
+            else:
+                block_int = block
+
+            # 解密
+            decrypted = self.decrypt_block(block_int)
+            # 与前一个密文块（或IV）异或
+            xored = decrypted ^ previous
+            plain_blocks.append(xored)
+            previous = block_int
+
+        return plain_blocks
 #ASCII码转换
 class ASCIIConverter:
     @staticmethod
@@ -261,6 +317,116 @@ class ASCIIConverter:
                 decrypted_blocks.append(format(decrypted_block, '016b'))
 
         return ASCIIConverter.binary_to_text(decrypted_blocks)
+
+    @staticmethod
+    def encrypt_text_cbc(text, s_aes, iv):
+        """CBC模式加密文本"""
+        binary_blocks = ASCIIConverter.text_to_binary(text)
+        encrypted_blocks = s_aes.encrypt_cbc(binary_blocks, iv)
+        return [format(block, '016b') for block in encrypted_blocks]
+
+    @staticmethod
+    def decrypt_text_cbc(binary_blocks, s_aes, iv):
+        """CBC模式解密文本"""
+        decrypted_blocks = s_aes.decrypt_cbc(binary_blocks, iv)
+        return ASCIIConverter.binary_to_text([format(block, '016b') for block in decrypted_blocks])
+class DoubleS_AES:
+    def __init__(self, key):
+        if not (0 <= key < 0x100000000):
+            raise ValueError("密钥必须是32位二进制数")
+        self.key1 = (key >> 16) & 0xFFFF  # 高16位
+        self.key2 = key & 0xFFFF  # 低16位
+        self.cipher1 = S_AES(self.key1)
+        self.cipher2 = S_AES(self.key2)
+
+    def encrypt(self, plaintext):
+        """双重加密：先用K1加密，再用K2加密"""
+        middle = self.cipher1.encrypt(plaintext)
+        return self.cipher2.encrypt(middle)
+
+    def decrypt(self, ciphertext):
+        """双重解密：先用K2解密，再用K1解密"""
+        middle = self.cipher2.decrypt(ciphertext)
+        return self.cipher1.decrypt(middle)
+
+
+class MeetInMiddleAttack:
+    def __init__(self, known_pairs):
+        """
+        known_pairs: 已知的明密文对列表，每个元素为(plaintext, ciphertext)
+        plaintext和ciphertext都是16位整数
+        """
+        self.known_pairs = known_pairs
+
+    def find_key(self):
+        """使用中间相遇攻击找到可能的密钥对(K1, K2)"""
+        # 如果没有已知对，无法攻击
+        if not self.known_pairs:
+            return []
+
+        # 使用第一对来构建表并查找候选密钥
+        plain, cipher = self.known_pairs[0]
+
+        # 构建加密表：K1 -> 中间密文
+        encrypt_table = {}
+        for k1 in range(0x10000):  # 遍历所有可能的K1
+            cipher1 = S_AES(k1)
+            mid = cipher1.encrypt(plain)
+            if mid not in encrypt_table:
+                encrypt_table[mid] = []
+            encrypt_table[mid].append(k1)
+
+        # 查找候选密钥
+        candidate_keys = []
+        for k2 in range(0x10000):  # 遍历所有可能的K2
+            cipher2 = S_AES(k2)
+            mid = cipher2.decrypt(cipher)
+            if mid in encrypt_table:
+                for k1 in encrypt_table[mid]:
+                    candidate_keys.append((k1, k2))
+
+        # 如果有多个已知对，验证候选密钥
+        if len(self.known_pairs) > 1:
+            verified_keys = []
+            for k1, k2 in candidate_keys:
+                double_aes = DoubleS_AES((k1 << 16) | k2)
+                valid = True
+                for plain, cipher in self.known_pairs[1:]:
+                    if double_aes.encrypt(plain) != cipher:
+                        valid = False
+                        break
+                if valid:
+                    verified_keys.append((k1, k2))
+            return verified_keys
+
+        return candidate_keys
+
+
+class TripleS_AES:
+    def __init__(self, key):
+        """
+        使用32位密钥(K1+K2)的三重加密
+        加密：E_K1 -> D_K2 -> E_K1
+        解密：D_K1 -> E_K2 -> D_K1
+        """
+        if not (0 <= key < 0x100000000):
+            raise ValueError("密钥必须是32位二进制数")
+        self.key1 = (key >> 16) & 0xFFFF  # 高16位
+        self.key2 = key & 0xFFFF  # 低16位
+        self.cipher1 = S_AES(self.key1)
+        self.cipher2 = S_AES(self.key2)
+
+    def encrypt(self, plaintext):
+        """三重加密：E_K1 -> D_K2 -> E_K1"""
+        temp = self.cipher1.encrypt(plaintext)
+        temp = self.cipher2.decrypt(temp)
+        return self.cipher1.encrypt(temp)
+
+    def decrypt(self, ciphertext):
+        """三重解密：D_K1 -> E_K2 -> D_K1"""
+        temp = self.cipher1.decrypt(ciphertext)
+        temp = self.cipher2.encrypt(temp)
+        return self.cipher1.decrypt(temp)
 #UI
 class S_AES_UI(QMainWindow):
     def __init__(self):
@@ -342,6 +508,11 @@ class S_AES_UI(QMainWindow):
 
         #ASCII解密标签页
         self.setup_ascii_decrypt_tab(tab_widget)
+
+        #多重加密标签页
+        self.setup_multi_encryption_tab(tab_widget)
+        #cbc模式标签页
+        self.setup_cbc_tab(tab_widget)
 
     def setup_key_tab(self, tab_widget):
         key_tab = QWidget()
@@ -536,6 +707,162 @@ class S_AES_UI(QMainWindow):
         layout.addStretch()
 
         tab_widget.addTab(ascii_decrypt_tab, "ASCII解密")
+    def setup_multi_encryption_tab(self, tab_widget):
+        multi_tab = QWidget()
+        layout = QVBoxLayout(multi_tab)
+
+        # 双重加密组
+        double_group = QGroupBox("双重S-AES加密")
+        double_layout = QFormLayout(double_group)
+
+        self.double_key_input = QLineEdit()
+        self.double_key_input.setPlaceholderText("输入32位二进制密钥，如：10101010101010101010101010101010")
+        double_layout.addRow("双重加密密钥:", self.double_key_input)
+
+        self.double_plaintext_input = QLineEdit()
+        self.double_plaintext_input.setPlaceholderText("输入16位二进制明密文")
+        double_layout.addRow("明密文:", self.double_plaintext_input)
+
+        double_btn_layout = QHBoxLayout()
+        self.double_encrypt_btn = QPushButton("双重加密")
+        self.double_encrypt_btn.clicked.connect(self.double_encrypt)
+        self.double_decrypt_btn = QPushButton("双重解密")
+        self.double_decrypt_btn.clicked.connect(self.double_decrypt)
+
+        double_btn_layout.addWidget(self.double_encrypt_btn)
+        double_btn_layout.addWidget(self.double_decrypt_btn)
+        double_layout.addRow("操作:", double_btn_layout)
+
+        self.double_result_output = QTextEdit()
+        self.double_result_output.setReadOnly(True)
+        self.double_result_output.setMaximumHeight(100)
+        double_layout.addRow("结果:", self.double_result_output)
+
+        # 三重加密组
+        triple_group = QGroupBox("三重S-AES加密")
+        triple_layout = QFormLayout(triple_group)
+
+        self.triple_key_input = QLineEdit()
+        self.triple_key_input.setPlaceholderText("输入32位二进制密钥")
+        triple_layout.addRow("三重加密密钥:", self.triple_key_input)
+
+        self.triple_plaintext_input = QLineEdit()
+        self.triple_plaintext_input.setPlaceholderText("输入16位二进制明密文")
+        triple_layout.addRow("明密文:", self.triple_plaintext_input)
+
+        triple_btn_layout = QHBoxLayout()
+        self.triple_encrypt_btn = QPushButton("三重加密")
+        self.triple_encrypt_btn.clicked.connect(self.triple_encrypt)
+        self.triple_decrypt_btn = QPushButton("三重解密")
+        self.triple_decrypt_btn.clicked.connect(self.triple_decrypt)
+
+        triple_btn_layout.addWidget(self.triple_encrypt_btn)
+        triple_btn_layout.addWidget(self.triple_decrypt_btn)
+        triple_layout.addRow("操作:", triple_btn_layout)
+
+        self.triple_result_output = QTextEdit()
+        self.triple_result_output.setReadOnly(True)
+        self.triple_result_output.setMaximumHeight(100)
+        triple_layout.addRow("结果:", self.triple_result_output)
+
+        # 中间相遇攻击组
+        attack_group = QGroupBox("中间相遇攻击")
+        attack_layout = QVBoxLayout(attack_group)
+
+        attack_input_layout = QHBoxLayout()
+        self.attack_plaintext_input = QLineEdit()
+        self.attack_plaintext_input.setPlaceholderText("已知明文")
+        self.attack_ciphertext_input = QLineEdit()
+        self.attack_ciphertext_input.setPlaceholderText("对应密文")
+
+        attack_input_layout.addWidget(QLabel("明文:"))
+        attack_input_layout.addWidget(self.attack_plaintext_input)
+        attack_input_layout.addWidget(QLabel("密文:"))
+        attack_input_layout.addWidget(self.attack_ciphertext_input)
+
+        self.attack_btn = QPushButton("执行中间相遇攻击")
+        self.attack_btn.clicked.connect(self.meet_in_middle_attack)
+
+        self.attack_result_output = QTextEdit()
+        self.attack_result_output.setReadOnly(True)
+        self.attack_result_output.setMaximumHeight(150)
+
+        attack_layout.addLayout(attack_input_layout)
+        attack_layout.addWidget(self.attack_btn)
+        attack_layout.addWidget(self.attack_result_output)
+
+        layout.addWidget(double_group)
+        layout.addWidget(triple_group)
+        layout.addWidget(attack_group)
+        layout.addStretch()
+
+        tab_widget.addTab(multi_tab, "多重加密")
+
+    def setup_cbc_tab(self, tab_widget):
+        cbc_tab = QWidget()
+        layout = QVBoxLayout(cbc_tab)
+
+        # CBC加密组
+        cbc_encrypt_group = QGroupBox("CBC模式加密")
+        cbc_encrypt_layout = QFormLayout(cbc_encrypt_group)
+
+        self.cbc_iv_input = QLineEdit()
+        self.cbc_iv_input.setPlaceholderText("输入16位二进制初始向量(IV)")
+        cbc_encrypt_layout.addRow("初始向量(IV):", self.cbc_iv_input)
+
+        self.cbc_plaintext_input = QTextEdit()
+        self.cbc_plaintext_input.setPlaceholderText("输入要加密的文本")
+        self.cbc_plaintext_input.setMaximumHeight(80)
+        cbc_encrypt_layout.addRow("明文:", self.cbc_plaintext_input)
+
+        cbc_encrypt_btn_layout = QHBoxLayout()
+        self.cbc_encrypt_btn = QPushButton("CBC加密")
+        self.cbc_encrypt_btn.clicked.connect(self.cbc_encrypt)
+        self.clear_cbc_encrypt_btn = QPushButton("清空")
+        self.clear_cbc_encrypt_btn.clicked.connect(self.clear_cbc_encrypt)
+
+        cbc_encrypt_btn_layout.addWidget(self.cbc_encrypt_btn)
+        cbc_encrypt_btn_layout.addWidget(self.clear_cbc_encrypt_btn)
+        cbc_encrypt_layout.addRow("操作:", cbc_encrypt_btn_layout)
+
+        self.cbc_ciphertext_output = QTextEdit()
+        self.cbc_ciphertext_output.setReadOnly(True)
+        self.cbc_ciphertext_output.setMaximumHeight(120)
+        cbc_encrypt_layout.addRow("加密结果:", self.cbc_ciphertext_output)
+
+        # CBC解密组
+        cbc_decrypt_group = QGroupBox("CBC模式解密")
+        cbc_decrypt_layout = QFormLayout(cbc_decrypt_group)
+
+        self.cbc_decrypt_iv_input = QLineEdit()
+        self.cbc_decrypt_iv_input.setPlaceholderText("输入16位二进制初始向量(IV)")
+        cbc_decrypt_layout.addRow("初始向量(IV):", self.cbc_decrypt_iv_input)
+
+        self.cbc_ciphertext_input = QTextEdit()
+        self.cbc_ciphertext_input.setPlaceholderText("每行输入一个16位二进制密文块")
+        self.cbc_ciphertext_input.setMaximumHeight(80)
+        cbc_decrypt_layout.addRow("密文块:", self.cbc_ciphertext_input)
+
+        cbc_decrypt_btn_layout = QHBoxLayout()
+        self.cbc_decrypt_btn = QPushButton("CBC解密")
+        self.cbc_decrypt_btn.clicked.connect(self.cbc_decrypt)
+        self.clear_cbc_decrypt_btn = QPushButton("清空")
+        self.clear_cbc_decrypt_btn.clicked.connect(self.clear_cbc_decrypt)
+
+        cbc_decrypt_btn_layout.addWidget(self.cbc_decrypt_btn)
+        cbc_decrypt_btn_layout.addWidget(self.clear_cbc_decrypt_btn)
+        cbc_decrypt_layout.addRow("操作:", cbc_decrypt_btn_layout)
+
+        self.cbc_decrypt_output = QTextEdit()
+        self.cbc_decrypt_output.setReadOnly(True)
+        self.cbc_decrypt_output.setMaximumHeight(120)
+        cbc_decrypt_layout.addRow("解密结果:", self.cbc_decrypt_output)
+
+        layout.addWidget(cbc_encrypt_group)
+        layout.addWidget(cbc_decrypt_group)
+        layout.addStretch()
+
+        tab_widget.addTab(cbc_tab, "CBC模式")
     def validate_key_input(self, text):
         if not text:
             self.key_status.setText("等待输入...")
@@ -711,6 +1038,252 @@ class S_AES_UI(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "错误", f"解密文本时发生错误：{str(e)}")
 
+    def double_encrypt(self):
+        key_text = self.double_key_input.text().strip()
+        plaintext = self.double_plaintext_input.text().strip()
+
+        if len(key_text) != 32:
+            QMessageBox.warning(self, "错误", "双重加密密钥必须是32位！")
+            return
+
+        if len(plaintext) != 16:
+            QMessageBox.warning(self, "错误", "明文必须是16位！")
+            return
+
+        try:
+            key_int = int(key_text, 2)
+            plaintext_int = int(plaintext, 2)
+
+            double_aes = DoubleS_AES(key_int)
+            ciphertext = double_aes.encrypt(plaintext_int)
+
+            result = f"双重加密结果:\n"
+            result += f"密钥: {key_text}\n"
+            result += f"明文: {plaintext}\n"
+            result += f"密文(二进制): {format(ciphertext, '016b')}\n"
+            result += f"密文(十六进制): {format(ciphertext, '04X')}"
+
+            self.double_result_output.setText(result)
+
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"双重加密失败: {str(e)}")
+
+    def double_decrypt(self):
+        key_text = self.double_key_input.text().strip()
+        ciphertext = self.double_plaintext_input.text().strip()  # 这里应该是密文输入
+
+        if len(key_text) != 32:
+            QMessageBox.warning(self, "错误", "双重加密密钥必须是32位！")
+            return
+
+        if len(ciphertext) != 16:
+            QMessageBox.warning(self, "错误", "密文必须是16位！")
+            return
+
+        try:
+            key_int = int(key_text, 2)
+            ciphertext_int = int(ciphertext, 2)
+
+            double_aes = DoubleS_AES(key_int)
+            plaintext = double_aes.decrypt(ciphertext_int)
+
+            result = f"双重解密结果:\n"
+            result += f"密钥: {key_text}\n"
+            result += f"密文: {ciphertext}\n"
+            result += f"明文(二进制): {format(plaintext, '016b')}\n"
+            result += f"明文(十六进制): {format(plaintext, '04X')}"
+
+            self.double_result_output.setText(result)
+
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"双重解密失败: {str(e)}")
+
+    def triple_encrypt(self):
+        key_text = self.triple_key_input.text().strip()
+        plaintext = self.triple_plaintext_input.text().strip()
+
+        if len(key_text) != 32:
+            QMessageBox.warning(self, "错误", "三重加密密钥必须是32位！")
+            return
+
+        if len(plaintext) != 16:
+            QMessageBox.warning(self, "错误", "明文必须是16位！")
+            return
+
+        try:
+            key_int = int(key_text, 2)
+            plaintext_int = int(plaintext, 2)
+
+            triple_aes = TripleS_AES(key_int)
+            ciphertext = triple_aes.encrypt(plaintext_int)
+
+            result = f"三重加密结果:\n"
+            result += f"密钥: {key_text}\n"
+            result += f"明文: {plaintext}\n"
+            result += f"密文(二进制): {format(ciphertext, '016b')}\n"
+            result += f"密文(十六进制): {format(ciphertext, '04X')}"
+
+            self.triple_result_output.setText(result)
+
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"三重加密失败: {str(e)}")
+
+    def triple_decrypt(self):
+        key_text = self.triple_key_input.text().strip()
+        ciphertext = self.triple_plaintext_input.text().strip()  # 这里应该是密文输入
+
+        if len(key_text) != 32:
+            QMessageBox.warning(self, "错误", "三重加密密钥必须是32位！")
+            return
+
+        if len(ciphertext) != 16:
+            QMessageBox.warning(self, "错误", "密文必须是16位！")
+            return
+
+        try:
+            key_int = int(key_text, 2)
+            ciphertext_int = int(ciphertext, 2)
+
+            triple_aes = TripleS_AES(key_int)
+            plaintext = triple_aes.decrypt(ciphertext_int)
+
+            result = f"三重解密结果:\n"
+            result += f"密钥: {key_text}\n"
+            result += f"密文: {ciphertext}\n"
+            result += f"明文(二进制): {format(plaintext, '016b')}\n"
+            result += f"明文(十六进制): {format(plaintext, '04X')}"
+
+            self.triple_result_output.setText(result)
+
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"三重解密失败: {str(e)}")
+
+    def meet_in_middle_attack(self):
+        plaintext = self.attack_plaintext_input.text().strip()
+        ciphertext = self.attack_ciphertext_input.text().strip()
+
+        if len(plaintext) != 16 or len(ciphertext) != 16:
+            QMessageBox.warning(self, "错误", "明文和密文都必须是16位！")
+            return
+
+        try:
+            plaintext_int = int(plaintext, 2)
+            ciphertext_int = int(ciphertext, 2)
+
+            # 执行中间相遇攻击
+            known_pairs = [(plaintext_int, ciphertext_int)]
+            attack = MeetInMiddleAttack(known_pairs)
+            candidate_keys = attack.find_key()
+
+            result = f"中间相遇攻击结果:\n"
+            result += f"已知明文: {plaintext}\n"
+            result += f"已知密文: {ciphertext}\n\n"
+            result += f"找到 {len(candidate_keys)} 个可能的密钥对:\n"
+
+            for i, (k1, k2) in enumerate(candidate_keys):
+                result += f"密钥对 {i + 1}: K1={format(k1, '016b')}, K2={format(k2, '016b')}\n"
+
+            self.attack_result_output.setText(result)
+
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"中间相遇攻击失败: {str(e)}")
+
+    # CBC加密方法
+    def cbc_encrypt(self):
+        if self.s_aes is None:
+            QMessageBox.warning(self, "错误", "请先设置密钥！")
+            return
+
+        iv_text = self.cbc_iv_input.text().strip()
+        text = self.cbc_plaintext_input.toPlainText().strip()
+
+        if not iv_text:
+            QMessageBox.warning(self, "错误", "请输入初始向量(IV)！")
+            return
+
+        if len(iv_text) != 16:
+            QMessageBox.warning(self, "错误", "初始向量必须是16位二进制！")
+            return
+
+        if not all(c in '01' for c in iv_text):
+            QMessageBox.warning(self, "错误", "初始向量只能包含0和1！")
+            return
+
+        if not text:
+            QMessageBox.warning(self, "错误", "请输入要加密的文本！")
+            return
+
+        try:
+            encrypted_blocks = ASCIIConverter.encrypt_text_cbc(text, self.s_aes, iv_text)
+
+            result = f"原始文本: {text}\n"
+            result += f"初始向量: {iv_text}\n"
+            result += f"文本长度: {len(text)} 字符\n\n"
+            result += "CBC加密后的二进制块:\n"
+            for i, block in enumerate(encrypted_blocks):
+                result += f"块 {i + 1}: {block}\n"
+
+            result += f"\n所有块连接: {''.join(encrypted_blocks)}"
+
+            self.cbc_ciphertext_output.setText(result)
+
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"CBC加密时发生错误：{str(e)}")
+
+    # CBC解密方法
+    def cbc_decrypt(self):
+        if self.s_aes is None:
+            QMessageBox.warning(self, "错误", "请先设置密钥！")
+            return
+
+        iv_text = self.cbc_decrypt_iv_input.text().strip()
+        ciphertext_input = self.cbc_ciphertext_input.toPlainText().strip()
+
+        if not iv_text:
+            QMessageBox.warning(self, "错误", "请输入初始向量(IV)！")
+            return
+
+        if len(iv_text) != 16:
+            QMessageBox.warning(self, "错误", "初始向量必须是16位二进制！")
+            return
+
+        if not all(c in '01' for c in iv_text):
+            QMessageBox.warning(self, "错误", "初始向量只能包含0和1！")
+            return
+
+        if not ciphertext_input:
+            QMessageBox.warning(self, "错误", "请输入要解密的密文块！")
+            return
+
+        try:
+            # 处理输入：可以是多行或单个长字符串
+            if '\n' in ciphertext_input:
+                # 多行输入，每行一个16位块
+                binary_blocks = [line.strip() for line in ciphertext_input.split('\n') if line.strip()]
+            else:
+                # 单个长字符串，按16位分割
+                binary_blocks = [ciphertext_input[i:i + 16] for i in range(0, len(ciphertext_input), 16)]
+
+            # 验证所有块都是16位二进制
+            for block in binary_blocks:
+                if len(block) != 16 or not all(c in '01' for c in block):
+                    QMessageBox.warning(self, "错误", f"无效的二进制块: {block}")
+                    return
+
+            decrypted_text = ASCIIConverter.decrypt_text_cbc(binary_blocks, self.s_aes, iv_text)
+
+            result = f"解密结果: {decrypted_text}\n\n"
+            result += f"初始向量: {iv_text}\n"
+            result += f"处理的块数量: {len(binary_blocks)}\n"
+            result += "处理的块:\n"
+            for i, block in enumerate(binary_blocks):
+                result += f"块 {i + 1}: {block}\n"
+
+            self.cbc_decrypt_output.setText(result)
+
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"CBC解密时发生错误：{str(e)}")
+
     def clear_encrypt(self):
         self.plaintext_input.clear()
         self.ciphertext_output.clear()
@@ -726,6 +1299,18 @@ class S_AES_UI(QMainWindow):
     def clear_ascii_decrypt(self):
         self.ascii_ciphertext_input.clear()
         self.ascii_decrypt_output.clear()
+
+    # 清空CBC加密输入输出
+    def clear_cbc_encrypt(self):
+        self.cbc_iv_input.clear()
+        self.cbc_plaintext_input.clear()
+        self.cbc_ciphertext_output.clear()
+
+    # 清空CBC解密输入输出
+    def clear_cbc_decrypt(self):
+        self.cbc_decrypt_iv_input.clear()
+        self.cbc_ciphertext_input.clear()
+        self.cbc_decrypt_output.clear()
 
 
 if __name__ == "__main__":
