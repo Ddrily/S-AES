@@ -23,17 +23,17 @@ class S_AES:
     # 轮常数
     RCON = [0x80, 0x30]
 
-    # 列混淆矩阵
-    MIX_COLUMNS_MATRIX = [
-        [0x1, 0x4],
-        [0x4, 0x1]
-    ]
-
-    # 逆列混淆矩阵
-    INV_MIX_COLUMNS_MATRIX = [
-        [0x9, 0x2],
-        [0x2, 0x9]
-    ]
+    # # 列混淆矩阵
+    # MIX_COLUMNS_MATRIX = [
+    #     [0x1, 0x4],
+    #     [0x4, 0x1]
+    # ]
+    #
+    # # 逆列混淆矩阵
+    # INV_MIX_COLUMNS_MATRIX = [
+    #     [0x9, 0x2],
+    #     [0x2, 0x9]
+    # ]
 
     # 初始化A-AES实例
     def __init__(self, key):
@@ -42,166 +42,158 @@ class S_AES:
         self.master_key = key
         self.round_keys = self.key_expansion(key)
 
-    @staticmethod
-    # 将16位整数转换为2✖2状态矩阵
-    def int_to_state(value):
-        return [[(value >> 12) & 0xF, (value >> 8) & 0xF],
-                [(value >> 4) & 0xF, value & 0xF]
-                ]
+    def _gf_mult(self, a, b):
+        """GF(2^4)有限域乘法，使用本原多项式 x^4 + x + 1 (0x13)"""
+        a &= 0xF
+        b &= 0xF
+        p = 0
+        for _ in range(4):
+            if b & 1:
+                p ^= a
+            carry = a & 0x8
+            a = (a << 1) & 0x1F
+            if carry:
+                a ^= 0x13
+            a &= 0xF
+            b >>= 1
+        return p & 0xF
 
-    @staticmethod
-    # 将2✖2状态矩阵转化为16位整数
-    def state_to_int(state):
-        return (state[0][0] << 12) | (state[0][1] << 8) | (state[1][0] << 4) | state[1][1]
+    def _sub_nibble(self, nibble, s_box):
+        return s_box[nibble & 0xF]
 
-    @staticmethod
-    # 旋转半字节（用于密钥扩展）
-    def rot_nibble(nibble):
-        return ((nibble & 0xF) << 4 | (nibble >> 4) & 0xF)
+    def _sub_nibbles(self, state, s_box):
+        """对整个状态进行S盒替换"""
+        n0 = self._sub_nibble((state >> 12) & 0xF, s_box)
+        n1 = self._sub_nibble((state >> 8) & 0xF, s_box)
+        n2 = self._sub_nibble((state >> 4) & 0xF, s_box)
+        n3 = self._sub_nibble(state & 0xF, s_box)
+        return (n0 << 12) | (n1 << 8) | (n2 << 4) | n3
 
-    @staticmethod
-    # 半字节替代
-    def sub_nibble(nibble, s_box):
-        return s_box[nibble]
+    def _shift_rows(self, state):
+        """行移位：交换s1和s3"""
+        s0 = (state >> 12) & 0xF
+        s1 = (state >> 8) & 0xF
+        s2 = (state >> 4) & 0xF
+        s3 = state & 0xF
+        # 交换s1和s3
+        return (s0 << 12) | (s3 << 8) | (s2 << 4) | s1
 
-    # 密钥扩展
+    def _mix_columns(self, state):
+        """列混淆"""
+        s0 = (state >> 12) & 0xF
+        s1 = (state >> 8) & 0xF
+        s2 = (state >> 4) & 0xF
+        s3 = state & 0xF
+
+        # 第一列: [s0, s1]
+        s0_new = s0 ^ self._gf_mult(4, s1)
+        s1_new = self._gf_mult(4, s0) ^ s1
+
+        # 第二列: [s2, s3]
+        s2_new = s2 ^ self._gf_mult(4, s3)
+        s3_new = self._gf_mult(4, s2) ^ s3
+
+        return (s0_new << 12) | (s1_new << 8) | (s2_new << 4) | s3_new
+
+    def _inv_mix_columns(self, state):
+        """逆列混淆"""
+        s0 = (state >> 12) & 0xF
+        s1 = (state >> 8) & 0xF
+        s2 = (state >> 4) & 0xF
+        s3 = state & 0xF
+
+        # 第一列: [s0, s1]
+        s0_new = self._gf_mult(9, s0) ^ self._gf_mult(2, s1)
+        s1_new = self._gf_mult(2, s0) ^ self._gf_mult(9, s1)
+
+        # 第二列: [s2, s3]
+        s2_new = self._gf_mult(9, s2) ^ self._gf_mult(2, s3)
+        s3_new = self._gf_mult(2, s2) ^ self._gf_mult(9, s3)
+
+        return (s0_new << 12) | (s1_new << 8) | (s2_new << 4) | s3_new
+
+    def _rot_nib(self, byte_val):
+        """旋转字节中的半字节"""
+        return ((byte_val & 0x0F) << 4) | ((byte_val & 0xF0) >> 4)
+
+    def _g_function(self, word, rcon):
+        """密钥扩展中的g函数"""
+        # RotNib: 交换两个半字节
+        rotated = self._rot_nib(word)
+        # SubNib: 对每个半字节进行S盒替换
+        high = self._sub_nibble((rotated >> 4) & 0xF, self.S_BOX)
+        low = self._sub_nibble(rotated & 0xF, self.S_BOX)
+        subbed = (high << 4) | low
+        # 异或轮常数
+        return subbed ^ rcon
+
     def key_expansion(self, key):
-        # 初始密钥
-        w0 = (key >> 8) & 0xF
-        w1 = key & 0xF
+        """密钥扩展"""
+        w0 = (key >> 8) & 0xFF
+        w1 = key & 0xFF
 
-        # 第一轮密钥扩展
-        temp = self.rot_nibble(w1)
-        temp = (self.sub_nibble((temp >> 4) & 0xF, self.S_BOX) << 4) | self.sub_nibble(temp & 0xF, self.S_BOX)
-
-        w2 = w0 ^ temp ^ self.RCON[0]
+        # 第一轮扩展
+        w2 = w0 ^ self._g_function(w1, self.RCON[0])
         w3 = w2 ^ w1
 
-        # 第二轮密钥扩展
-        temp = self.rot_nibble(w1)
-        temp = (self.sub_nibble((temp >> 4) & 0xF, self.S_BOX) << 4) | self.sub_nibble(temp & 0xF, self.S_BOX)
-        w4 = w2 ^ temp ^ self.RCON[1]
+        # 第二轮扩展
+        w4 = w2 ^ self._g_function(w3, self.RCON[1])
         w5 = w4 ^ w3
 
-        # 生成16位轮密钥
+        # 生成轮密钥
         round_key0 = (w0 << 8) | w1
         round_key1 = (w2 << 8) | w3
         round_key2 = (w4 << 8) | w5
 
         return [round_key0, round_key1, round_key2]
 
-    # 轮密钥加
-    def add_round_key(self, state, round_key):
-        round_key_state = self.int_to_state(round_key)
-        new_state = [[0, 0], [0, 0]]
+    def encrypt_block(self, plaintext):
+        """加密单个16位分组"""
+        state = plaintext & 0xFFFF
 
-        for i in range(2):
-            for j in range(2):
-                new_state[i][j] = state[i][j] ^ round_key_state[i][j]
+        # 初始轮密钥加
+        state ^= self.round_keys[0]
 
-        return new_state
+        # 第一轮
+        state = self._sub_nibbles(state, self.S_BOX)
+        state = self._shift_rows(state)
+        state = self._mix_columns(state)
+        state ^= self.round_keys[1]
 
-    # 半字节替代*
-    def sub_nibbles(self, state, s_box):
-        new_state = [[0, 0], [0, 0]]
-
-        for i in range(2):
-            for j in range(2):
-                new_state[i][j] = self.sub_nibble(state[i][j], s_box)
-
-        return new_state
-
-    # 行移位
-    def shift_rows(self, state):
-        # 第一行不变，第二行交换
-        return [
-            [state[0][0], state[0][1]],
-            [state[1][1], state[1][0]]
-        ]
-
-    # GF(2^4)乘法
-    def gf_mult(self, a, b):
-        p = 0
-        for _ in range(4):
-            if b & 1:
-                p ^= a
-            hi_bit_set = a & 0x8
-            a <<= 1
-            a &= 0xF
-            if hi_bit_set:
-                a ^= 0x3
-            b >>= 1
-        return p
-
-    # 列混淆
-    def mix_columns(self, state, matrix):
-        new_state = [[0, 0], [0, 0]]
-
-        for j in range(2):
-            s0 = state[0][j]
-            s1 = state[1][j]
-
-            new_state[0][j] = self.gf_mult(matrix[0][0], s0) ^ self.gf_mult(matrix[0][1], s1)
-            new_state[1][j] = self.gf_mult(matrix[1][0], s0) ^ self.gf_mult(matrix[1][1], s1)
-
-        return new_state
-
-    # 加密单个16位分组
-    # 加密单个16位分组
-    def encrypt_block(self, plaintext):  # 明文分组是16位二进制字符串，密钥是16位
-        state = self.int_to_state(plaintext)
-        # 轮密钥加
-        state_matrix = self.add_round_key(state, self.round_keys[0])
-        # 半字节替换
-        state_matrix = self.sub_nibbles(state_matrix, self.S_BOX)
-        # 行移位
-        state_matrix = self.shift_rows(state_matrix)
-        # 列混淆
-        state_matrix = self.mix_columns(state_matrix, self.MIX_COLUMNS_MATRIX)
-        # 第二次轮密钥加
-        state_matrix = self.add_round_key(state_matrix, self.round_keys[1])
         # 第二轮
-        # 半字节替换
-        state_matrix = self.sub_nibbles(state_matrix, self.S_BOX)
-        # 行位移
-        state_matrix = self.shift_rows(state_matrix)
-        # 第三次轮密钥加
-        state_matrix = self.add_round_key(state_matrix, self.round_keys[2])
-        ciphertext = self.state_to_int(state_matrix)
-        return ciphertext
+        state = self._sub_nibbles(state, self.S_BOX)
+        state = self._shift_rows(state)
+        state ^= self.round_keys[2]
 
-    # 解密单个16位分组
+        return state
+
     def decrypt_block(self, ciphertext):
-        state = self.int_to_state(ciphertext)
-        # 轮密钥加
-        state_matrix = self.add_round_key(state, self.round_keys[2])
-        # 逆行移位
-        state_matrix = self.shift_rows(state_matrix)
-        # 逆半字节代替
-        state_matrix = self.sub_nibbles(state_matrix, self.INV_S_BOX)
-        # 轮密钥加
-        state_matrix = self.add_round_key(state_matrix, self.round_keys[1])
-        # 逆列混淆
-        state_matrix = self.mix_columns(state_matrix, self.INV_MIX_COLUMNS_MATRIX)
-        # 第二轮
-        # 逆行移位
-        state_matrix = self.shift_rows(state_matrix)
-        # 逆半字节代替
-        state_matrix = self.sub_nibbles(state_matrix, self.INV_S_BOX)
-        state_matrix = self.add_round_key(state_matrix, self.round_keys[0])
-        plaintext = self.state_to_int(state_matrix)
-        return plaintext
+        """解密单个16位分组"""
+        state = ciphertext & 0xFFFF
 
-    # 加密数据
+        # 初始轮密钥加
+        state ^= self.round_keys[2]
+
+        # 第一轮逆运算
+        state = self._shift_rows(state)
+        state = self._sub_nibbles(state, self.INV_S_BOX)
+        state ^= self.round_keys[1]
+        state = self._inv_mix_columns(state)
+
+        # 第二轮逆运算
+        state = self._shift_rows(state)
+        state = self._sub_nibbles(state, self.INV_S_BOX)
+        state ^= self.round_keys[0]
+
+        return state
+
     def encrypt(self, plaintext):
-        # 16位二进制字符串
-        if isinstance(plaintext, str):  # 如果是二进制字符串
+        if isinstance(plaintext, str):
             if len(plaintext) != 16:
                 raise ValueError('明文必须是16位二进制字符串')
             plaintext = int(plaintext, 2)
         return self.encrypt_block(plaintext)
 
-    # 解密数据
     def decrypt(self, ciphertext):
         if isinstance(ciphertext, str):
             if len(ciphertext) != 16:
