@@ -22,7 +22,7 @@ S-AES（简化版高级加密标准）加密解密工具是一个基于Python和
 ### 1. 克隆或下载项目
 ```bash
 git clone <项目地址>
-cd s-aes-tool
+cd s-aes
 ```
 
 ### 2. 安装依赖
@@ -32,12 +32,12 @@ pip install PyQt5
 
 ### 3. 运行应用
 ```bash
-python s_aes_tool.py
+python s_aes.py
 ```
 
 ## 项目结构
 ```
-s-aes-tool/
+s-aes/
 ├── core/                 # 核心算法模块
 │   ├── s_aes.py         # S-AES算法实现
 │   ├── modes.py         # 操作模式实现
@@ -46,7 +46,7 @@ s-aes-tool/
 │   └── main_window.py   # 主窗口实现
 ├── tests/               # 测试模块
 │   └── test_s_aes.py    # 单元测试
-├── s_aes_tool.py        # 主程序入口
+├── s_aes.py        # 主程序入口
 ├── requirements.txt     # 依赖列表
 └── README.md           # 项目说明
 ```
@@ -127,7 +127,7 @@ python -m unittest tests/test_s_aes.py
 ### 创建可执行文件
 使用PyInstaller打包为独立可执行文件：
 ```bash
-pyinstaller --onefile --windowed s_aes_tool.py
+pyinstaller --onefile --windowed s_aes.py
 ```
 
 ### 依赖管理

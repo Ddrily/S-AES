@@ -20,7 +20,7 @@ pip install PyQt5
 ### 1. 启动应用程序
 运行主程序文件启动应用：
 ```bash
-python s_aes_tool.py
+python s_aes.py
 ```
 
 ### 2. 密钥设置

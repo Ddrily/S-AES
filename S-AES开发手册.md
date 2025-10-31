@@ -9,7 +9,7 @@
 
 ### 核心模块结构
 ```
-s_aes_tool/
+s_aes/
 ├── core/           # 核心算法模块
 │   ├── s_aes.py    # S-AES算法实现
 │   ├── modes.py    # 操作模式实现
@@ -218,7 +218,7 @@ def fast_sub_nibbles(state, s_box):
 ### 打包为可执行文件
 使用PyInstaller打包：
 ```bash
-pyinstaller --onefile --windowed s_aes_tool.py
+pyinstaller --onefile --windowed s_aes.py
 ```
 
 ### 依赖管理
